@@ -78,7 +78,7 @@ function ChatPage({ history, reloadHistory }) {
     if (!message.trim()) return;
     setSending(true);
     try {
-      await apiPost('/chat', { message });
+      await apiPost('/chat', { message }, true);
       setMessage('');
       await reloadHistory();
     } catch {
