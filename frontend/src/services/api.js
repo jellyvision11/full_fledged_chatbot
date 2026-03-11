@@ -1,4 +1,4 @@
-const BASE_URL = 'http://127.0.0.1:8000';
+const BASE_URL = 'https://full-fledged-chatbot.onrender.com';
 
 function getHeaders(auth = true, isForm = false) {
   const headers = {};
