@@ -1,155 +1,196 @@
 import React, { useEffect, useState } from 'react';
-import { apiGet, apiPatch, apiPost, apiPut, login, register } from './services/api';
+import { apiGet, apiPost, login, register } from './services/api';
+import './styles.css';
 
-const tabs = ['dashboard', 'chat', 'moods', 'tasks', 'profile'];
-
-function AuthScreen({ onAuth }) {
-  const [mode, setMode] = useState('login');
-  const [form, setForm] = useState({ name: '', email: '', password: '' });
+function AuthPage({ onLogin }) {
+  const [isRegister, setIsRegister] = useState(false);
+  const [name, setName] = useState('demo');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setLoading(true);
     setError('');
+    setLoading(true);
+
     try {
-      if (mode === 'register') {
-        await register(form.name, form.email, form.password);
+      if (isRegister) {
+        await register(name, email, password);
+        setIsRegister(false);
+        setError('Account created. Please login now.');
+      } else {
+        const data = await login(email, password);
+        if (data?.access_token) {
+          localStorage.setItem('token', data.access_token);
+        }
+        if (data?.user) {
+          localStorage.setItem('user', JSON.stringify(data.user));
+        }
+        onLogin(data);
       }
-      const data = await login(form.email, form.password);
-      localStorage.setItem('token', data.access_token);
-      onAuth();
     } catch (err) {
       setError('Could not authenticate. Check your details and try again.');
+      console.error(err);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="auth-shell">
+    <div className="app-shell auth-shell">
       <div className="auth-card">
         <h1>ADHD Happiness Chatbot</h1>
         <p>Your calm, practical AI companion for mood, focus, and routines.</p>
-        <form onSubmit={handleSubmit}>
-          {mode === 'register' && (
-            <input placeholder="Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
+
+        <form onSubmit={handleSubmit} className="stack">
+          {isRegister && (
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Name"
+              required
+            />
           )}
-          <input placeholder="Email" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required />
-          <input placeholder="Password" type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required />
-          <button disabled={loading}>{loading ? 'Please wait...' : mode === 'login' ? 'Login' : 'Create account'}</button>
+
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            type="email"
+            required
+          />
+
+          <input
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            type="password"
+            required
+          />
+
+          <button type="submit" disabled={loading}>
+            {loading ? 'Please wait...' : isRegister ? 'Create account' : 'Login'}
+          </button>
         </form>
-        {error && <div className="error">{error}</div>}
-        <div className="switcher">
-          {mode === 'login' ? 'New here?' : 'Already have an account?'}{' '}
-          <span onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
-            {mode === 'login' ? 'Create one' : 'Login'}
+
+        {error && <p className="error-text">{error}</p>}
+
+        <p className="switch-auth">
+          {isRegister ? 'Already have an account?' : 'New here?'}{' '}
+          <span onClick={() => setIsRegister((prev) => !prev)}>
+            {isRegister ? 'Login' : 'Create one'}
           </span>
-        </div>
+        </p>
       </div>
     </div>
   );
 }
 
-function Dashboard({ config, moods, tasks, profile }) {
-  const openTasks = tasks.filter(t => t.status !== 'done').length;
-  const latestMood = moods[0];
+function DashboardCard({ title, children }) {
   return (
-    <div className="grid">
-      <div className="card hero-card">
-        <h2>Welcome back, {profile?.name || 'friend'}</h2>
-        <p>Mode: {config?.mode || 'offline'} · Model: {config?.model || 'llama3.2'}</p>
-        <p>{profile?.goals}</p>
-      </div>
-      <div className="card"><h3>Latest mood</h3><p>{latestMood ? `${latestMood.score}/10 · ${latestMood.energy}` : 'No mood logged yet'}</p></div>
-      <div className="card"><h3>Open tasks</h3><p>{openTasks}</p></div>
-      <div className="card"><h3>Preferred tone</h3><p>{profile?.preferred_tone || 'calm'}</p></div>
+    <div className="card">
+      <h3>{title}</h3>
+      <div>{children}</div>
     </div>
   );
 }
 
-function ChatPage({ history, reloadHistory }) {
-  const [message, setMessage] = useState('');
-  const [sending, setSending] = useState(false);
-
-  async function sendMessage(e) {
-    e.preventDefault();
-    if (!message.trim()) return;
-    setSending(true);
-    try {
-      await apiPost('/chat', { message }, true);
-      setMessage('');
-      await reloadHistory();
-    } catch {
-      alert('Chat failed. Make sure backend and Ollama are running.');
-    } finally {
-      setSending(false);
-    }
-  }
-
+function ChatPage({ history, message, setMessage, sendMessage }) {
   return (
-    <div className="card chat-card">
-      <div className="chat-window">
-        {history.length === 0 ? <p className="muted">No messages yet.</p> : history.map((m, i) => (
-          <div key={i} className={`bubble ${m.role}`}>
-            <strong>{m.role === 'user' ? 'You' : 'Bot'}</strong>
-            <div>{m.content}</div>
+    <div className="card">
+      <h3>Chat</h3>
+
+      <div className="chat-box">
+        {(history || []).length === 0 ? (
+          <div className="bot-message">
+            <strong>Bot</strong>
+            <p>I’m here with you. Tell me what feels hard right now.</p>
           </div>
-        ))}
+        ) : (
+          (history || []).map((item, idx) => (
+            <div
+              key={item.id || idx}
+              className={item.role === 'user' ? 'user-message' : 'bot-message'}
+            >
+              <strong>{item.role === 'user' ? 'You' : 'Bot'}</strong>
+              <p>{item.content}</p>
+            </div>
+          ))
+        )}
       </div>
-      <form className="chat-form" onSubmit={sendMessage}>
-        <input value={message} onChange={e => setMessage(e.target.value)} placeholder="Tell me what feels hard right now..." />
-        <button disabled={sending}>{sending ? 'Sending...' : 'Send'}</button>
-      </form>
+
+      <div className="chat-input-row">
+        <input
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder="Tell me what feels hard right now..."
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              sendMessage();
+            }
+          }}
+        />
+        <button onClick={sendMessage}>Send</button>
+      </div>
     </div>
   );
 }
 
 function MoodPage({ moods, reloadMoods }) {
   const [score, setScore] = useState(5);
-  const [energy, setEnergy] = useState('medium');
   const [note, setNote] = useState('');
 
   async function saveMood(e) {
     e.preventDefault();
     try {
-  await apiPost('/mood', { score: Number(score), energy, note });
-  reloadMoods();
-} catch (err) {
-  console.error(err);
-}
+      await apiPost('/mood', {
+        mood_value: Number(score),
+        note,
+      });
+      setNote('');
+      reloadMoods();
+    } catch (err) {
+      console.error('saveMood error:', err);
+      alert('Could not save mood.');
+    }
   }
 
+  const latestMood = (moods || [])[0];
+
   return (
-    <div className="grid">
+    <div className="grid two-col">
       <div className="card">
         <h3>Log mood</h3>
-        <form onSubmit={saveMood}>
-          <label>Mood score</label>
-          <input type="number" min="1" max="10" value={score} onChange={e => setScore(e.target.value)} />
-          <label>Energy</label>
-          <select value={energy} onChange={e => setEnergy(e.target.value)}>
-            <option>low</option>
-            <option>medium</option>
-            <option>high</option>
-          </select>
-          <label>Note</label>
-          <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="What shaped your mood today?" />
-          <button>Save mood</button>
+        <form onSubmit={saveMood} className="stack">
+          <input
+            type="number"
+            min="1"
+            max="10"
+            value={score}
+            onChange={(e) => setScore(e.target.value)}
+            placeholder="Mood 1-10"
+          />
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Optional note"
+          />
+          <button type="submit">Save mood</button>
         </form>
       </div>
+
       <div className="card">
-        <h3>Recent entries</h3>
-        <div className="list">
-          {(moods || []).map(m => (
-            <div className="list-item" key={m.id}>
-              <div><strong>{m.score}/10</strong> · {m.energy}</div>
-              <div className="muted small">{new Date(m.created_at).toLocaleString()}</div>
-              <div>{m.note}</div>
-            </div>
-          ))}
-        </div>
+        <h3>Latest mood</h3>
+        {latestMood ? (
+          <>
+            <p><strong>Score:</strong> {latestMood.mood_value ?? '-'}</p>
+            <p><strong>Note:</strong> {latestMood.note || 'No note'}</p>
+          </>
+        ) : (
+          <p>No mood logged yet</p>
+        )}
       </div>
     </div>
   );
@@ -157,166 +198,282 @@ function MoodPage({ moods, reloadMoods }) {
 
 function TasksPage({ tasks, reloadTasks }) {
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [priority, setPriority] = useState('medium');
 
-  async function addTask(e) {
+  async function createTask(e) {
     e.preventDefault();
-    await apiPost('/tasks', { title, description, priority });
-    setTitle('');
-    setDescription('');
-    reloadTasks();
+    if (!title.trim()) return;
+
+    try {
+      await apiPost('/tasks', { title });
+      setTitle('');
+      reloadTasks();
+    } catch (err) {
+      console.error('createTask error:', err);
+      alert('Could not create task.');
+    }
   }
 
-  async function markDone(id) {
-    await apiPatch(`/tasks/${id}`, { status: 'done' });
-    reloadTasks();
+  async function toggleTask(task) {
+    try {
+      await fetch(
+        `${'https://full-fledged-chatbot.onrender.com'}/tasks/${task.id}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+          body: JSON.stringify({ done: !task.done }),
+        }
+      );
+      reloadTasks();
+    } catch (err) {
+      console.error('toggleTask error:', err);
+    }
   }
 
   return (
-    <div className="grid">
+    <div className="grid two-col">
       <div className="card">
-        <h3>Add task</h3>
-        <form onSubmit={addTask}>
-          <input placeholder="Task title" value={title} onChange={e => setTitle(e.target.value)} required />
-          <textarea placeholder="Description" value={description} onChange={e => setDescription(e.target.value)} />
-          <select value={priority} onChange={e => setPriority(e.target.value)}>
-            <option>low</option>
-            <option>medium</option>
-            <option>high</option>
-          </select>
-          <button>Add task</button>
+        <h3>Create task</h3>
+        <form onSubmit={createTask} className="stack">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Task title"
+          />
+          <button type="submit">Add task</button>
         </form>
       </div>
+
       <div className="card">
-        <h3>Task list</h3>
-        <div className="list">
-          {tasks.map(t => (
-            <div className="list-item" key={t.id}>
-              <div className="task-row">
-                <div>
-                  <strong>{t.title}</strong>
-                  <div className="muted small">{t.priority} · {t.status}</div>
-                  <div>{t.description}</div>
-                </div>
-                {t.status !== 'done' && <button className="small-btn" onClick={() => markDone(t.id)}>Done</button>}
-              </div>
-            </div>
-          ))}
-        </div>
+        <h3>Open tasks</h3>
+        {(tasks || []).length === 0 ? (
+          <p>No tasks yet</p>
+        ) : (
+          <div className="stack">
+            {(tasks || []).map((task) => (
+              <label key={task.id} className="task-row">
+                <input
+                  type="checkbox"
+                  checked={!!task.done}
+                  onChange={() => toggleTask(task)}
+                />
+                <span className={task.done ? 'done' : ''}>{task.title}</span>
+              </label>
+            ))}
+          </div>
+        )}
       </div>
-    </div>
-  );
-}
-
-function ProfilePage({ profile, reloadProfile }) {
-  const [form, setForm] = useState(profile);
-  useEffect(() => setForm(profile), [profile]);
-  if (!form) return null;
-
-  async function save(e) {
-    e.preventDefault();
-    await apiPut('/profile', {
-      preferred_tone: form.preferred_tone,
-      goals: form.goals,
-      struggles: form.struggles,
-    });
-    reloadProfile();
-    alert('Profile saved');
-  }
-
-  return (
-    <div className="card">
-      <h3>Profile settings</h3>
-      <form onSubmit={save}>
-        <label>Name</label>
-        <input value={form.name || ''} disabled />
-        <label>Preferred tone</label>
-        <select value={form.preferred_tone} onChange={e => setForm({ ...form, preferred_tone: e.target.value })}>
-          <option>calm</option>
-          <option>direct</option>
-          <option>encouraging</option>
-        </select>
-        <label>Goals</label>
-        <textarea value={form.goals} onChange={e => setForm({ ...form, goals: e.target.value })} />
-        <label>Struggles</label>
-        <textarea value={form.struggles} onChange={e => setForm({ ...form, struggles: e.target.value })} />
-        <button>Save profile</button>
-      </form>
     </div>
   );
 }
 
 export default function App() {
-  const [authenticated, setAuthenticated] = useState(!!localStorage.getItem('token'));
-  const [tab, setTab] = useState('dashboard');
+  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem('user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
   const [config, setConfig] = useState(null);
   const [profile, setProfile] = useState(null);
   const [history, setHistory] = useState([]);
   const [moods, setMoods] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [tab, setTab] = useState('chat');
+  const [message, setMessage] = useState('');
+  const [bootLoading, setBootLoading] = useState(true);
 
-  async function loadAll() {
+  async function loadConfig() {
     try {
-      const [configData, me, profileData, historyData, moodsData, tasksData] = await Promise.all([
-        apiGet('/config', false),
-        apiGet('/auth/me'),
-        apiGet('/profile'),
-        apiGet('/chat/history'),
-        apiGet('\/mood'),
-        apiGet('/tasks'),
-      ]);
-      setConfig(configData);
-      setProfile({ ...profileData, name: me.name, email: me.email });
-      setHistory(historyData.history);
-      setMoods(moodsData.moods);
-      setTasks(tasksData.tasks);
-    } catch {
-      localStorage.removeItem('token');
-      setAuthenticated(false);
+      const res = await apiGet('/config', false);
+      setConfig(res || null);
+    } catch (err) {
+      console.error('loadConfig error:', err);
+      setConfig(null);
     }
   }
 
-  useEffect(() => {
-    if (authenticated) loadAll();
-  }, [authenticated]);
+  async function loadProfile() {
+    try {
+      const res = await apiGet('/profile');
+      setProfile(res || null);
+    } catch (err) {
+      console.error('loadProfile error:', err);
+      setProfile(null);
+    }
+  }
 
-  if (!authenticated) return <AuthScreen onAuth={() => setAuthenticated(true)} />;
+  async function reloadHistory() {
+    try {
+      const res = await apiGet('/chat/history');
+      setHistory(res?.history || []);
+    } catch (err) {
+      console.error('reloadHistory error:', err);
+      setHistory([]);
+    }
+  }
+
+  async function reloadMoods() {
+    try {
+      const res = await apiGet('/mood');
+      if (res?.mood) {
+        setMoods([res.mood]);
+      } else {
+        setMoods([]);
+      }
+    } catch (err) {
+      console.error('reloadMoods error:', err);
+      setMoods([]);
+    }
+  }
+
+  async function reloadTasks() {
+    try {
+      const res = await apiGet('/tasks');
+      setTasks(res?.tasks || []);
+    } catch (err) {
+      console.error('reloadTasks error:', err);
+      setTasks([]);
+    }
+  }
+
+  async function boot() {
+    setBootLoading(true);
+    await loadConfig();
+
+    if (token) {
+      await Promise.all([loadProfile(), reloadHistory(), reloadMoods(), reloadTasks()]);
+    }
+
+    setBootLoading(false);
+  }
+
+  useEffect(() => {
+    boot();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  async function handleLogin(data) {
+    setToken(localStorage.getItem('token'));
+    setUser(data?.user || null);
+  }
+
+  function logout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setToken(null);
+    setUser(null);
+    setProfile(null);
+    setHistory([]);
+    setMoods([]);
+    setTasks([]);
+  }
+
+  async function sendMessage() {
+    if (!message.trim()) return;
+
+    const userText = message.trim();
+    setMessage('');
+
+    setHistory((prev) => [
+      ...prev,
+      { role: 'user', content: userText },
+    ]);
+
+    try {
+      const res = await apiPost('/chat', { message: userText }, true);
+      const botText = res?.reply || res?.response || 'No response received.';
+      setHistory((prev) => [
+        ...prev,
+        { role: 'assistant', content: botText },
+      ]);
+    } catch (err) {
+      console.error('sendMessage error:', err);
+      setHistory((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'Something went wrong while sending the message.' },
+      ]);
+    }
+  }
+
+  if (!token) {
+    return <AuthPage onLogin={handleLogin} />;
+  }
+
+  if (bootLoading) {
+    return (
+      <div className="app-shell">
+        <div className="card">
+          <h2>Loading...</h2>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div>
-          <h2>ADHD Bot</h2>
-          <p className="muted">SaaS-style local AI assistant</p>
-        </div>
-        <nav>
-          {tabs.map(t => (
-            <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>
-              {t[0].toUpperCase() + t.slice(1)}
-            </button>
-          ))}
-        </nav>
-        <button className="logout" onClick={() => { localStorage.removeItem('token'); setAuthenticated(false); }}>Logout</button>
-      </aside>
-      <main className="main-content">
-        <header className="topbar">
-          <div>
-            <h1>{tab[0].toUpperCase() + tab.slice(1)}</h1>
-            <p className="muted">{config?.mode || 'offline-ollama'} · {config?.model || 'llama3.2'}</p>
-          </div>
-        </header>
-        {tab === 'dashboard' && <Dashboard config={config} moods={moods} tasks={tasks} profile={profile} />}
-        {tab === 'chat' && <ChatPage history={history} reloadHistory={async () => setHistory((await apiGet('/chat/history')).history)} />}
-        {tab === 'moods' && <MoodPage moods={moods} reloadMoods={async () => const res = await apiGet('/mood');
-setMoods(res.moods || []);} />}
-        {tab === 'tasks' && <TasksPage tasks={tasks} reloadTasks={async () => setTasks((await apiGet('/tasks')).tasks)} />}
-        {tab === 'profile' && <ProfilePage profile={profile} reloadProfile={async () => {
-          const me = await apiGet('/auth/me');
-          const p = await apiGet('/profile');
-          setProfile({ ...p, name: me.name, email: me.email });
-        }} />}
-      </main>
+      <div className="topbar">
+        <h1>Dashboard</h1>
+        <button onClick={logout}>Logout</button>
+      </div>
+
+      <p className="muted">
+        {config?.mode || 'unknown'} · {config?.model || 'unknown'}
+      </p>
+
+      <div className="card hero">
+        <h2>Welcome back, {profile?.name || user?.name || 'User'}</h2>
+        <p>
+          Mode: {config?.mode || 'unknown'} · Model: {config?.model || 'unknown'}
+        </p>
+        <p>Reduce overwhelm, build routines, and start tasks more easily</p>
+      </div>
+
+      <div className="grid three-col">
+        <DashboardCard title="Latest mood">
+          {(moods || []).length > 0 ? (
+            <>
+              <p><strong>Score:</strong> {moods[0]?.mood_value ?? '-'}</p>
+              <p>{moods[0]?.note || 'No note'}</p>
+            </>
+          ) : (
+            <p>No mood logged yet</p>
+          )}
+        </DashboardCard>
+
+        <DashboardCard title="Open tasks">
+          <p>{(tasks || []).filter((t) => !t.done).length}</p>
+        </DashboardCard>
+
+        <DashboardCard title="Preferred tone">
+          <p>{profile?.preferred_tone || 'calm'}</p>
+        </DashboardCard>
+      </div>
+
+      <div className="tabs">
+        <button onClick={() => setTab('chat')} className={tab === 'chat' ? 'active' : ''}>Chat</button>
+        <button onClick={() => setTab('mood')} className={tab === 'mood' ? 'active' : ''}>Mood</button>
+        <button onClick={() => setTab('tasks')} className={tab === 'tasks' ? 'active' : ''}>Tasks</button>
+      </div>
+
+      {tab === 'chat' && (
+        <ChatPage
+          history={history}
+          message={message}
+          setMessage={setMessage}
+          sendMessage={sendMessage}
+        />
+      )}
+
+      {tab === 'mood' && (
+        <MoodPage moods={moods} reloadMoods={reloadMoods} />
+      )}
+
+      {tab === 'tasks' && (
+        <TasksPage tasks={tasks} reloadTasks={reloadTasks} />
+      )}
     </div>
   );
 }
