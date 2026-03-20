@@ -113,7 +113,7 @@ function MoodPage({ moods, reloadMoods }) {
 
   async function saveMood(e) {
     e.preventDefault();
-    await apiPost('/moods', { score: Number(score), energy, note });
+    await apiPost('/mood', { score: Number(score), energy, note });
     setNote('');
     reloadMoods();
   }
@@ -260,7 +260,7 @@ export default function App() {
         apiGet('/auth/me'),
         apiGet('/profile'),
         apiGet('/chat/history'),
-        apiGet('/moods'),
+        apiGet('\/mood'),
         apiGet('/tasks'),
       ]);
       setConfig(configData);
@@ -305,7 +305,7 @@ export default function App() {
         </header>
         {tab === 'dashboard' && <Dashboard config={config} moods={moods} tasks={tasks} profile={profile} />}
         {tab === 'chat' && <ChatPage history={history} reloadHistory={async () => setHistory((await apiGet('/chat/history')).history)} />}
-        {tab === 'moods' && <MoodPage moods={moods} reloadMoods={async () => setMoods((await apiGet('/moods')).moods)} />}
+        {tab === 'moods' && <MoodPage moods={moods} reloadMoods={async () => setMoods((await apiGet('/mood')).mood)} />}
         {tab === 'tasks' && <TasksPage tasks={tasks} reloadTasks={async () => setTasks((await apiGet('/tasks')).tasks)} />}
         {tab === 'profile' && <ProfilePage profile={profile} reloadProfile={async () => {
           const me = await apiGet('/auth/me');
