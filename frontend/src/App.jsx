@@ -113,9 +113,12 @@ function MoodPage({ moods, reloadMoods }) {
 
   async function saveMood(e) {
     e.preventDefault();
-    await apiPost('/mood', { score: Number(score), energy, note });
-    setNote('');
-    reloadMoods();
+    try {
+  await apiPost('/mood', { score: Number(score), energy, note });
+  reloadMoods();
+} catch (err) {
+  console.error(err);
+}
   }
 
   return (
@@ -139,7 +142,7 @@ function MoodPage({ moods, reloadMoods }) {
       <div className="card">
         <h3>Recent entries</h3>
         <div className="list">
-          {moods.map(m => (
+          {(moods || []).map(m => (
             <div className="list-item" key={m.id}>
               <div><strong>{m.score}/10</strong> · {m.energy}</div>
               <div className="muted small">{new Date(m.created_at).toLocaleString()}</div>
@@ -305,7 +308,8 @@ export default function App() {
         </header>
         {tab === 'dashboard' && <Dashboard config={config} moods={moods} tasks={tasks} profile={profile} />}
         {tab === 'chat' && <ChatPage history={history} reloadHistory={async () => setHistory((await apiGet('/chat/history')).history)} />}
-        {tab === 'moods' && <MoodPage moods={moods} reloadMoods={async () => setMoods((await apiGet('/mood')).mood)} />}
+        {tab === 'moods' && <MoodPage moods={moods} reloadMoods={async () => const res = await apiGet('/mood');
+setMoods(res.moods || []);} />}
         {tab === 'tasks' && <TasksPage tasks={tasks} reloadTasks={async () => setTasks((await apiGet('/tasks')).tasks)} />}
         {tab === 'profile' && <ProfilePage profile={profile} reloadProfile={async () => {
           const me = await apiGet('/auth/me');
